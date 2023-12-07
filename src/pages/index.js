@@ -1,14 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Head from "next/head";
 // component
 import Comments from '../components/Comments';
 import AddUpdateComment from "@/components/AddUpdateComment";
+import ModalDelete from "@/components/ModalDelete";
 export default function Home() {
   const [comments,setComments] = useState([]);
   const [user,setUser] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [isReply,setIsReply] = useState(false);
   const [targetReply, setTargetReply] = useState(null);
+  const [modal,SetModal] = useState(<div></div>);
+  const [isUpdate, setIsUpdate] = useState(false);
+  const [targetEdit, setTargetEdit] = useState(null);
+  const [updated, setUpdated] = useState(false);
+  const [showReply, setShowReply] = useState(false);
+  const [isReplySent, setIsReplySent] = useState(false);
+  
   function fetchData() {
     fetch('/data.json')
       .then(res => res.json())
@@ -23,29 +31,47 @@ export default function Home() {
   useEffect(() => {
     fetchData();
   }, []);
+
   function incrementScore(id) {
     const newComments = updateScore(comments, id, 1);
     setComments(newComments);
   }
   function decrementScore(id) {
-      const newComments = updateScore(comments, id, -1);
-      setComments(newComments);
+    const newComments = updateScore(comments, id, -1);
+    setComments(newComments);
   }
   function updateScore(comments, id, increment) {
-    return comments.map(comment => {
-      if (comment.id === id) {
-        if(comment.score === 0 && increment === -1) return comment;
+    let updatedComments = [...comments];
+    let updated = false;
+  
+    const updateComment = (comment) => {
+      if (comment.id === id && !comment.updated) {
+        if (comment.score === 0 && increment === -1) return comment;
         comment.score += increment;
+        comment.updated = true;
+        updated = true;
       }
       if (comment.replies && comment.replies.length > 0) {
         comment.replies = updateScore(comment.replies, id, increment);
+        if (comment.replies.some(reply => reply.updated)) {
+          comment.updated = true;
+          updated = true;
+        }
       }
       return comment;
-    });
+    };
+  
+    updatedComments = updatedComments.map(updateComment);
+    return updatedComments;
   }
+  
   function deleteComment(id) {
+    SetModal(<ModalDelete SetModal={SetModal} id={id} confirmDeleteComment={confirmDeleteComment}/>)
+  }
+  function confirmDeleteComment(id) {
     const newComments = removeComment(comments, id);
     setComments(newComments);
+    SetModal(<div></div>);
   }
 
   function removeComment(comments, id) {
@@ -78,31 +104,66 @@ export default function Home() {
       return `${seconds} second${seconds !== 1 ? 's' : ''} ago`;
     }
   }
-  function addComment(e) {
+  function addComment(e, isUpdate) {
     e.preventDefault();
-    const dateNow = Date.now();
-    const newComments = [...comments];
-    const newComment = {
-      id: Date.now(),
-      createdAt: getTimeDifference(dateNow),
-      content: commentText,
-      user : {
-        image : {
-          png : user.image.png,
-          webp : user.image.webp
+    if(!isUpdate) {
+      const dateNow = Date.now();
+      const newComments = [...comments];
+      const newComment = {
+        id: Date.now(),
+        createdAt: getTimeDifference(dateNow),
+        content: commentText,
+        user : {
+          image : {
+            png : user.image.png,
+            webp : user.image.webp
+          },
+          username: user.username
         },
-        username: user.username
-      },
-      score: 0,
-      replies: [],
-    };
-    newComments.push(newComment);
-    setComments(newComments);
-    setCommentText('');
+        score: 0,
+        replies: [],
+      };
+      newComments.push(newComment);
+      setComments(newComments);
+      setCommentText('');
+    } else {
+      // update the comment
+      const newComments = [...comments];
+      const newComment = {
+        id: Date.now(),
+        createdAt: getTimeDifference(Date.now()),
+        content: commentText,
+        user : {
+          image : {
+            png : user.image.png,
+            webp : user.image.webp
+          },
+          username: user.username
+        },
+        score: 0,
+        replies: [],
+      };
+      const updateComment = (comment) => {
+        if (comment.id === targetEdit.id) {
+          comment.content = newComment.content;
+        } else if (comment.replies && comment.replies.length > 0) {
+          comment.replies = comment.replies.map(reply => updateComment(reply));
+        }
+        return comment;
+      };
+      newComments.map(comment => updateComment(comment));
+      setComments(newComments);
+      setCommentText('');
+      setIsUpdate(false);
+      setIsReplySent(true);
+      setIsReply(false);
+    }
   }
   function replyComment(id,item) {
     setIsReply(true);
     setTargetReply(item);
+    setShowReply(true);
+    setIsReplySent(false);
   }
   function sendReplyComment(e) {
     e.preventDefault();
@@ -141,15 +202,19 @@ export default function Home() {
     setComments(newComments);
     setCommentText('');
     setIsReply(false);
+    setIsReplySent(true);
   }
 
-  function editComment(e, id) {
-    e.preventDefault();
-    const newComments = [...comments];
-    const comment = newComments.find(comment => comment.id === id);
-    comment.content = commentText;
-    setComments(newComments);
-    setCommentText('');
+  function editComment(item) {
+    const editedComment = item.content;
+    setTargetEdit(item);
+    setCommentText(editedComment);
+    setIsUpdate(true);
+  }
+  function cancelReply() {
+    setIsReply(false);
+    setTargetReply(null);
+    setShowReply(false);
   }
   function renderReplies(item, incrementScore, decrementScore, deleteComment, user, replyComment) {
     const renderNestedReplies = (replies) => {
@@ -164,6 +229,7 @@ export default function Home() {
               user={user}
               isReply={true}
               replyComment={replyComment}
+              editComment={editComment}
             />
             {renderNestedReplies(reply.replies)}
           </div>
@@ -188,6 +254,7 @@ export default function Home() {
                   user={user}
                   isReply={true}
                   replyComment={replyComment}
+                  editComment={editComment}
                 />
                 {renderNestedReplies(reply.replies)}
               </div>
@@ -205,14 +272,40 @@ export default function Home() {
         <title>Frontend Mentor | Comment section</title>
         <link rel="icon" href="/images/favicon-32x32.png" />
       </Head>
-      <main className="bg-Very-light-gray p-3">
+      <main className="p-3 md:w-[50%] md:py-10 mx-auto">
         {comments.length ? comments.map((item, index) => (
           <div key={index}>
-            <Comments incrementScore={incrementScore} decrementScore={decrementScore} deleteComment={deleteComment} key={index} item={item} user={user} isReply={false} replyComment={replyComment} />
+            <Comments incrementScore={incrementScore} decrementScore={decrementScore} deleteComment={deleteComment} key={index} item={item} user={user} isReply={false} replyComment={replyComment} editComment={editComment} />
             {renderReplies(item, incrementScore, decrementScore, deleteComment, user, replyComment)}
+            {item === targetReply && !isReplySent && (
+              <AddUpdateComment
+                isReply={isReply}
+                targetReply={targetReply}
+                user={user}
+                commentText={commentText}
+                addComment={addComment}
+                setCommentText={setCommentText}
+                sendReplyComment={sendReplyComment}
+                isUpdate={isUpdate}
+                cancelReply={cancelReply}
+              />
+            )}
           </div>
         )) : <p>loading...</p>}
-        <AddUpdateComment isReply={isReply} targetReply={targetReply} user={user} commentText={commentText} addComment={addComment} setCommentText={setCommentText} sendReplyComment={sendReplyComment}/>
+        {!isReply && (
+          <AddUpdateComment
+            isReply={isReply}
+            targetReply={targetReply}
+            user={user}
+            commentText={commentText}
+            addComment={addComment}
+            setCommentText={setCommentText}
+            sendReplyComment={sendReplyComment}
+            isUpdate={isUpdate}
+            cancelReply
+          />
+        )}
+        {modal}
       </main>
     </>
   );
