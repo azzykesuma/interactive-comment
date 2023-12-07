@@ -16,6 +16,7 @@ export default function Home() {
   const [updated, setUpdated] = useState(false);
   const [showReply, setShowReply] = useState(false);
   const [isReplySent, setIsReplySent] = useState(false);
+  const [error, setError] = useState(false);
   
   function fetchData() {
     fetch('/data.json')
@@ -123,6 +124,11 @@ export default function Home() {
         score: 0,
         replies: [],
       };
+      
+      if (commentText === '') {
+        setError(true);
+        return;
+      }
       newComments.push(newComment);
       setComments(newComments);
       setCommentText('');
@@ -145,6 +151,11 @@ export default function Home() {
       };
       const updateComment = (comment) => {
         if (comment.id === targetEdit.id) {
+          if (comment.content === newComment.content) return comment;
+          if (commentText === '') {
+            setError(true);
+            return;
+          }
           comment.content = newComment.content;
         } else if (comment.replies && comment.replies.length > 0) {
           comment.replies = comment.replies.map(reply => updateComment(reply));
@@ -288,6 +299,7 @@ export default function Home() {
                 sendReplyComment={sendReplyComment}
                 isUpdate={isUpdate}
                 cancelReply={cancelReply}
+                error={error}
               />
             )}
           </div>
@@ -302,7 +314,8 @@ export default function Home() {
             setCommentText={setCommentText}
             sendReplyComment={sendReplyComment}
             isUpdate={isUpdate}
-            cancelReply
+            cancelReply={cancelReply}
+            error={error}
           />
         )}
         {modal}

@@ -2,12 +2,12 @@ import React, { useEffect } from 'react'
 import Image from 'next/image';
 
 function AddUpdateComment(props) {
-    const {user,commentText,addComment,setCommentText, isReply, targetReply,sendReplyComment, isUpdate,cancelReply} = props;
+    const {user,commentText,addComment,setCommentText, isReply, targetReply,sendReplyComment, isUpdate,cancelReply, error} = props;
     const placeholder = isReply ? `replying to @${targetReply.user.username}` : 'Add a comment...'
   return (
     <div className='bg-white rounded my-3 w-full'>
         <form className='p-5 grid grid-cols-2 gap-3'>
-            <textarea value={commentText} onChange={e => setCommentText(e.target.value)} className='w-full p-3 border-[1px] col-[1/-1] cursor-pointer' rows='4'  type='multi' placeholder={placeholder} />
+            <textarea value={commentText} onChange={e => setCommentText(e.target.value)} className={`w-full p-3 border-[1px] col-[1/-1] cursor-pointer ${error ? 'border-red-500' : ''} rounded`} rows='4'  placeholder={placeholder} />
             <div className='flex justify-between items-center mt-3'>
                 {user ? (
                     <Image src={user.image.webp} height={30} width={30} alt={user.username} />
